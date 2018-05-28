@@ -340,7 +340,11 @@ int close(int fd) {
 static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
+#ifdef ANDROID
+int connect(int sock, const struct sockaddr *addr, socklen_t len) {
+#else
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
+#endif
 	INIT();
 	PFUNC();
 

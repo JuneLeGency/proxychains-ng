@@ -787,7 +787,7 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 	free(res);
 }
 
-#if defined(IS_MAC) || defined(IS_OPENBSD) || defined(IS_SOLARIS)
+#if defined(IS_MAC) || defined(IS_OPENBSD) || defined(IS_SOLARIS) || defined(ANDROID)
 #if defined(IS_OPENBSD) || defined(IS_SOLARIS) /* OpenBSD and Solaris has its own incompatible getservbyname_r */
 #define getservbyname_r mygetservbyname_r
 #endif
