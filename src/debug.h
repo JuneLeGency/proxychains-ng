@@ -2,36 +2,37 @@
 #define DEBUG_H
 
 #ifdef NDEBUG
-#define RELEASE
+#undef DEBUG
 #else
 #define DEBUG
 #endif
-
-#ifdef DEBUG
 
 #ifdef ANDROID
 #include <android/log.h>
 #include <stdio.h>
 #define TAG "proxychains-ng"
-int custom_dprintf(int stream, const char *format, ...);
-
-#ifdef fprintf
-#undef fprintf
-#endif
-#define fprintf( __fp ,...) custom_dprintf(fileno(__fp), __VA_ARGS__)
-
-#ifdef dprintf
-#undef dprintf
-#endif
-#define dprintf(__fp ,...) custom_dprintf(__fp, __VA_ARGS__)
-
+int android_print(int fd, const char *format, ...);
 #ifdef perror
 #undef perror
 #endif
 
-#define perror(msg) dprintf(2, msg)
-
+#define perror(msg) android_print(2, msg)
 #endif
+
+#ifdef DEBUG
+
+#ifdef ANDROID
+#ifdef fprintf
+#undef fprintf
+#endif
+#define fprintf( __fp ,...) android_print(fileno(__fp), __VA_ARGS__)
+
+#ifdef dprintf
+#undef dprintf
+#endif
+#define dprintf(__fp ,...) android_print(__fp, __VA_ARGS__)
+#endif //ANDROID
+
 # include <stdio.h>
 # define PSTDERR(fmt, args...) do { dprintf(2,fmt, ## args); } while(0)
 # define PDEBUG(fmt, args...) PSTDERR("DEBUG:"fmt, ## args)
