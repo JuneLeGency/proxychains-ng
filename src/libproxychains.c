@@ -38,6 +38,10 @@
 #include "core.h"
 #include "common.h"
 
+#ifdef ANDROID
+#include "CydiaSubstrate.h"
+#endif
+
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
@@ -96,10 +100,35 @@ static void* load_sym(char* symname, void* proxyfunc) {
 	}
 	return funcptr;
 }
+#ifdef ANDROID
+static int custom_connect(int sock, const struct sockaddr *addr, socklen_t len);
+
+static ssize_t custom_sendto(int __fd, const void *__buf, size_t __n, int __flags, const struct sockaddr *__dst_addr,
+                             socklen_t __dst_addr_length);
+
+static struct hostent *custom_gethostbyname(const char *name);
+
+static int custom_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
+
+static void custom_freeaddrinfo(struct addrinfo *res);
+
+static struct hostent *custom_gethostbyaddr(const void *addr, socklen_t len, int type);
+
+static int custom_close(int __fd);
+#endif
 
 #define INIT() init_lib_wrapper(__FUNCTION__)
+#ifdef ANDROID
+#define CONNECT custom_connect
+#define SETUP_SYM(name) do { \
+    MSHookFunction(name, (void *) custom_ ## name, (void **) &true_ ## name); \
+    PDEBUG("interposed %s: %p -> %p", #name, name, true_ ## name); \
+} while(0)
 
+#else
+#define CONNECT connect
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
+#endif
 
 #include "allocator_thread.h"
 
@@ -112,7 +141,9 @@ static void setup_hooks(void) {
 	SETUP_SYM(getaddrinfo);
 	SETUP_SYM(freeaddrinfo);
 	SETUP_SYM(gethostbyaddr);
+#ifndef ANDROID
 	SETUP_SYM(getnameinfo);
+#endif
 	SETUP_SYM(close);
 #ifdef IS_SOLARIS
 	SETUP_SYM(__xnet_connect);
@@ -321,7 +352,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 
 /*******  HOOK FUNCTIONS  *******/
 
-int close(int fd) {
+int custom_close(int fd) {
 	if(!init_l) {
 		if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
 		close_fds[close_fds_cnt++] = fd;
@@ -341,7 +372,7 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 #ifdef ANDROID
-int connect(int sock, const struct sockaddr *addr, socklen_t len) {
+int custom_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 #else
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 #endif
@@ -419,7 +450,7 @@ int __xnet_connect(int sock, const struct sockaddr *addr, unsigned int len) {
 #endif
 
 static struct gethostbyname_data ghbndata;
-struct hostent *gethostbyname(const char *name) {
+struct hostent *custom_gethostbyname(const char *name) {
 	INIT();
 	PDEBUG("gethostbyname: %s\n", name);
 
@@ -431,7 +462,7 @@ struct hostent *gethostbyname(const char *name) {
 	return NULL;
 }
 
-int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
+int custom_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
@@ -441,7 +472,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 		return true_getaddrinfo(node, service, hints, res);
 }
 
-void freeaddrinfo(struct addrinfo *res) {
+void custom_freeaddrinfo(struct addrinfo *res) {
 	INIT();
 	PDEBUG("freeaddrinfo %p \n", (void *) res);
 
@@ -495,7 +526,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	return 0;
 }
 
-struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
+struct hostent *custom_gethostbyaddr(const void *addr, socklen_t len, int type) {
 	INIT();
 	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
@@ -531,12 +562,12 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 #   define MSG_FASTOPEN 0x20000000
 #endif
 
-ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+ssize_t custom_sendto(int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
 	INIT();
 	PFUNC();
 	if (flags & MSG_FASTOPEN) {
-		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
+		if (!CONNECT(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
 			return -1;
 		}
 		dest_addr = NULL;
