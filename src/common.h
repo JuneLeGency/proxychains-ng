@@ -8,7 +8,7 @@
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
 #endif
-
+#include "debug.h"
 #include <stddef.h>
 
 extern const char *proxy_type_strmap[];
