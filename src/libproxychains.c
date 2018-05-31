@@ -35,11 +35,12 @@
 #include <pthread.h>
 
 
+
 #include "core.h"
 #include "common.h"
 
 #ifdef ANDROID
-#include "CydiaSubstrate.h"
+#include <IHook/hook.h>
 #endif
 
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
@@ -121,10 +122,10 @@ static int custom_close(int __fd);
 #ifdef ANDROID
 #define CONNECT custom_connect
 #define SETUP_SYM(name) do { \
-    MSHookFunction(name, (void *) custom_ ## name, (void **) &true_ ## name); \
+    i_hook(name, (void *) custom_ ## name, (void **) &true_ ## name); \
     PDEBUG("interposed %s: %p -> %p", #name, name, true_ ## name); \
 } while(0)
-
+#define HOOK_DONE() do{i_hook_done();}while(0)
 #else
 #define CONNECT connect
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
@@ -147,6 +148,9 @@ static void setup_hooks(void) {
 	SETUP_SYM(close);
 #ifdef IS_SOLARIS
 	SETUP_SYM(__xnet_connect);
+#endif
+#ifdef ANDROID
+    HOOK_DONE();
 #endif
 }
 
